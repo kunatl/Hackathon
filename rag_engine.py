@@ -39,44 +39,51 @@ def search_similar_tickets(query, k=3):
     return results
 
 
-# 🤖 FULL RAG (Gemini Generation)
-from google import genai
+from openai import OpenAI
 
-# Initialize client
-client = genai.Client(api_key="AIzaSyCVKeu0cq0WJKywu7K4OhOsjkOqGF9Uusw")
+import os
 
+client = OpenAI(
+    api_key="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",   # paste your key
+    base_url="https://openrouter.ai/api/v1"
+)
 
-def generate_resolution_with_gemini(query, results):
-    if not results:
-        return "No similar tickets found. Escalate to support."
-    
+def generate_resolution(query, results):
     context = "\n\n".join([
         f"Ticket: {r['description']}\nResolution: {r['resolution']}"
         for r in results
     ])
     
     prompt = f"""
-    You are an expert IT support assistant.
+    You are an IT support assistant.
 
-    New Ticket:
+    Ticket:
     {query}
 
-    Similar Past Tickets:
+    Similar cases:
     {context}
 
-    Provide a clear, step-by-step resolution.
+    Provide step-by-step resolution.
     """
     
-    response = client.models.generate_content(
-        model="gemini-2.0-flash",  # ✅ correct working model
-        contents=prompt
+    response = client.chat.completions.create(
+        model="deepseek/deepseek-r1",
+        messages=[{"role": "user", "content": prompt}]
     )
     
-    return response.text
+    return response.choices[0].message.content
 
 
 # 🔁 Main RAG function
 def suggest_resolution(query):
     results = search_similar_tickets(query, k=3)
-    resolution = generate_resolution_with_gemini(query, results)
+    
+    try:
+        resolution = generate_resolution(query, results)
+    except Exception as e:
+        print("⚠️ LLM failed → using fallback")
+        
+        resolutions = [r["resolution"] for r in results]
+        resolution = max(set(resolutions), key=resolutions.count)
+    
     return resolution, results
